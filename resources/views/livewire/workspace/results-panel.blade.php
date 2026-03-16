@@ -1,4 +1,4 @@
-<div class="p-3">
+<div class="p-3" x-data="{ compareIds: [], showCompare: false }">
     <div class="flex items-center justify-between mb-3">
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Results</h3>
         <label class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
@@ -7,12 +7,39 @@
         </label>
     </div>
 
+    {{-- Compare bar --}}
+    @if($results->count() > 1)
+    <div x-show="compareIds.length > 0" x-cloak
+         class="mb-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-md px-3 py-2">
+        <div class="flex items-center justify-between">
+            <span class="text-xs text-indigo-700 dark:text-indigo-300 font-medium">
+                <span x-text="compareIds.length"></span> selected
+            </span>
+            <div class="flex items-center gap-2">
+                <button @click="compareIds = []" class="text-xs text-indigo-500 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300">Clear</button>
+                <button @click="showCompare = true" x-show="compareIds.length >= 2"
+                        class="px-2 py-0.5 text-xs bg-indigo-600 dark:bg-indigo-500 text-white rounded hover:bg-indigo-700 dark:hover:bg-indigo-600 font-medium transition">
+                    Compare
+                </button>
+            </div>
+        </div>
+    </div>
+    @endif
+
     <div class="space-y-3">
         @forelse($results as $result)
-        <div class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3" wire:key="result-{{ $result->id }}">
+        <div class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3" wire:key="result-{{ $result->id }}"
+             :class="compareIds.includes('{{ $result->id }}') ? 'ring-2 ring-indigo-300 dark:ring-indigo-600' : ''">
             {{-- Header --}}
             <div class="flex items-center justify-between mb-1.5">
                 <div class="flex items-center gap-1.5">
+                    @if($results->count() > 1)
+                    <input type="checkbox"
+                           value="{{ $result->id }}"
+                           x-model="compareIds"
+                           :disabled="compareIds.length >= 4 && !compareIds.includes('{{ $result->id }}')"
+                           class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 w-3 h-3 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed">
+                    @endif
                     <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
                         {{ $result->provider_name ?: 'Manual' }}
                     </span>
@@ -41,6 +68,18 @@
                             x-text="expanded ? 'Show less' : 'Show more'"></button>
                 @endif
             </div>
+
+            {{-- Meta info --}}
+            @if($result->duration_ms || $result->input_tokens || $result->output_tokens)
+            <div class="flex flex-wrap gap-2 text-xs text-gray-400 dark:text-gray-500 mt-1.5">
+                @if($result->duration_ms)
+                <span>{{ number_format($result->duration_ms / 1000, 2) }}s</span>
+                @endif
+                @if($result->input_tokens || $result->output_tokens)
+                <span>{{ $result->input_tokens ?? '?' }} in / {{ $result->output_tokens ?? '?' }} out</span>
+                @endif
+            </div>
+            @endif
 
             {{-- Rating --}}
             <div class="flex items-center gap-1 mt-2">
@@ -72,4 +111,83 @@
         </p>
         @endforelse
     </div>
+
+    {{-- Compare modal --}}
+    @if($results->count() > 1)
+    @php
+        $resultData = $results->mapWithKeys(function ($r) {
+            return [(string) $r->id => [
+                'id' => $r->id,
+                'provider' => $r->provider_name ?: 'Manual',
+                'model' => $r->model_name,
+                'text' => $r->response_text,
+                'rating' => $r->rating,
+                'starred' => $r->starred,
+                'duration_ms' => $r->duration_ms,
+                'input_tokens' => $r->input_tokens,
+                'output_tokens' => $r->output_tokens,
+                'version' => $r->promptVersion->version_number ?? null,
+                'notes' => $r->notes,
+                'created_at' => $r->created_at->diffForHumans(),
+            ]];
+        });
+    @endphp
+    <div x-show="showCompare" x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         @keydown.escape.window="showCompare = false"
+         x-data="{ allResults: {{ $resultData->toJson() }} }">
+        <div class="fixed inset-0 bg-black/50" @click="showCompare = false"></div>
+        <div class="relative min-h-screen flex items-start justify-center p-4 pt-8">
+            <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-7xl overflow-hidden" @click.stop>
+                {{-- Header --}}
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <h3 class="font-semibold text-gray-800 dark:text-gray-200 text-lg">Compare Results</h3>
+                    <button @click="showCompare = false" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                {{-- Side-by-side --}}
+                <div class="p-6 overflow-x-auto">
+                    <div class="flex gap-4" :style="'min-width: ' + (compareIds.length * 320) + 'px'">
+                        <template x-for="rid in compareIds" :key="rid">
+                            <div class="flex-1 min-w-[300px] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                                {{-- Column header --}}
+                                <div class="px-4 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <span class="font-semibold text-gray-800 dark:text-gray-200 text-sm" x-text="allResults[rid]?.provider"></span>
+                                            <span class="text-xs text-gray-400 dark:text-gray-500 font-mono ml-1" x-text="allResults[rid]?.model"></span>
+                                        </div>
+                                        <template x-if="allResults[rid]?.rating">
+                                            <span class="text-yellow-500 text-sm" x-text="'★'.repeat(allResults[rid].rating) + '☆'.repeat(5 - allResults[rid].rating)"></span>
+                                        </template>
+                                    </div>
+                                    <div class="flex gap-3 text-[10px] text-gray-400 dark:text-gray-500 mt-1">
+                                        <template x-if="allResults[rid]?.duration_ms">
+                                            <span x-text="(allResults[rid].duration_ms / 1000).toFixed(2) + 's'"></span>
+                                        </template>
+                                        <template x-if="allResults[rid]?.input_tokens || allResults[rid]?.output_tokens">
+                                            <span x-text="(allResults[rid].input_tokens || '?') + ' in / ' + (allResults[rid].output_tokens || '?') + ' out'"></span>
+                                        </template>
+                                        <template x-if="allResults[rid]?.version">
+                                            <span x-text="'v' + allResults[rid].version"></span>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                {{-- Response body --}}
+                                <div class="p-4 max-h-[60vh] overflow-auto">
+                                    <pre class="text-sm font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words leading-relaxed" x-text="allResults[rid]?.text"></pre>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
 </div>
