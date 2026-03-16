@@ -10,6 +10,8 @@ use Livewire\Component;
 #[Title('Settings')]
 class Settings extends Component
 {
+    public string $activeTab = 'api-keys';
+
     public function render()
     {
         return view('livewire.settings');

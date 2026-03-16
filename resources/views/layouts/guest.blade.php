@@ -12,7 +12,13 @@
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
 
         <script>
-            if (localStorage.theme === 'dark') document.documentElement.classList.add('dark');
+            (function() {
+                function applyTheme() {
+                    document.documentElement.classList.toggle('dark', localStorage.theme === 'dark');
+                }
+                applyTheme();
+                document.addEventListener('livewire:navigated', applyTheme);
+            })();
         </script>
 
         <!-- Scripts -->
