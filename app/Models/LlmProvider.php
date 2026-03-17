@@ -23,4 +23,14 @@ class LlmProvider extends Model
     ];
 
     protected $hidden = ['api_key'];
+
+    public function isOllama(): bool
+    {
+        return $this->driver === 'ollama';
+    }
+
+    public function results()
+    {
+        return $this->hasMany(Result::class);
+    }
 }

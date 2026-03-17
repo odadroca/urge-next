@@ -3,7 +3,11 @@
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Results</h3>
         <div class="flex items-center gap-2">
             @if($results->count() > 0)
-            <button wire:click="exportAllResults" class="text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400" title="Export all as ZIP">Export All</button>
+            <button wire:click="exportAllResults" wire:loading.attr="disabled"
+                    class="text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 disabled:opacity-50" title="Export all as ZIP">
+                <span wire:loading.remove wire:target="exportAllResults">Export All</span>
+                <span wire:loading wire:target="exportAllResults">Exporting...</span>
+            </button>
             @endif
             <label class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                 <input type="checkbox" wire:model.live="showAllVersions" class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 dark:bg-gray-700">
@@ -164,7 +168,28 @@
             <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-7xl overflow-hidden" @click.stop>
                 {{-- Header --}}
                 <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                    <h3 class="font-semibold text-gray-800 dark:text-gray-200 text-lg">Compare Results</h3>
+                    <div class="flex items-center gap-3">
+                        <h3 class="font-semibold text-gray-800 dark:text-gray-200 text-lg">Compare Results</h3>
+                        {{-- AI Summarize --}}
+                        <div x-show="compareIds.length === 2" x-data="{ showAiPicker: false }" class="relative">
+                            <button @click="showAiPicker = !showAiPicker" wire:loading.attr="disabled" wire:target="aiSummarizeDifferences"
+                                    class="px-2 py-1 text-xs text-purple-600 dark:text-purple-400 border border-purple-300 dark:border-purple-700 rounded-md hover:bg-purple-50 dark:hover:bg-purple-900/20 transition disabled:opacity-50">
+                                <span wire:loading.remove wire:target="aiSummarizeDifferences">AI Summarize</span>
+                                <span wire:loading wire:target="aiSummarizeDifferences">Analyzing...</span>
+                            </button>
+                            <div x-show="showAiPicker" x-cloak @click.outside="showAiPicker = false"
+                                 class="absolute left-0 top-full mt-1 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-30 py-1">
+                                <p class="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 font-medium border-b border-gray-100 dark:border-gray-700">Select provider</p>
+                                @foreach(\App\Models\LlmProvider::where('is_active', true)->get() as $prov)
+                                <button wire:click="aiSummarizeDifferences(compareIds[0], compareIds[1], {{ $prov->id }})"
+                                        @click="showAiPicker = false"
+                                        class="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 truncate">
+                                    {{ $prov->name }} <span class="text-gray-400 dark:text-gray-500">({{ $prov->model }})</span>
+                                </button>
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
                     <button @click="showCompare = false" class="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
@@ -208,6 +233,17 @@
                             </div>
                         </template>
                     </div>
+
+                    {{-- AI Summary --}}
+                    @if($aiSummary)
+                    <div class="mt-4 bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="text-sm font-medium text-purple-700 dark:text-purple-300">AI Comparison Summary</h4>
+                            <button wire:click="$set('aiSummary', null)" class="text-purple-400 hover:text-purple-600 dark:hover:text-purple-200 text-sm">&times;</button>
+                        </div>
+                        <div class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ $aiSummary }}</div>
+                    </div>
+                    @endif
                 </div>
             </div>
         </div>

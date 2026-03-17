@@ -22,5 +22,7 @@
         </div>
 
         <livewire:workspace.import-results :prompt="$prompt" :current-version="$currentVersion" :key="'ir-'.$prompt->id" />
+
+        <livewire:workspace.run-with-llm :prompt="$prompt" :current-version="$currentVersion" :key="'rl-'.$prompt->id" />
     </div>
 </div>

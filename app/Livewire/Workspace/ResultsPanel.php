@@ -4,9 +4,11 @@ namespace App\Livewire\Workspace;
 
 use App\Models\Collection;
 use App\Models\CollectionItem;
+use App\Models\LlmProvider;
 use App\Models\Prompt;
 use App\Models\PromptVersion;
 use App\Models\Result;
+use App\Services\AiAssistantService;
 use App\Services\ImportExportService;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -16,6 +18,8 @@ class ResultsPanel extends Component
     public Prompt $prompt;
     public ?int $currentVersionId = null;
     public bool $showAllVersions = false;
+    public ?string $aiSummary = null;
+    public bool $aiSummarizing = false;
 
     public function mount(Prompt $prompt, ?PromptVersion $currentVersion = null)
     {
@@ -97,6 +101,20 @@ class ResultsPanel extends Component
             readfile($tmpFile);
             unlink($tmpFile);
         }, $filename);
+    }
+
+    public function aiSummarizeDifferences(int $resultIdA, int $resultIdB, int $providerId): void
+    {
+        $a = Result::findOrFail($resultIdA);
+        $b = Result::findOrFail($resultIdB);
+        $provider = LlmProvider::findOrFail($providerId);
+
+        $this->aiSummarizing = true;
+        $service = app(AiAssistantService::class);
+        $result = $service->summarizeDifferences($a->response_text, $b->response_text, $provider);
+        $this->aiSummarizing = false;
+
+        $this->aiSummary = $result->success ? $result->text : "Error: {$result->error}";
     }
 
     public function addResultToCollection(int $resultId, int $collectionId)

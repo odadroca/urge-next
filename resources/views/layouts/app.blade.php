@@ -23,6 +23,43 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="font-sans antialiased bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+        {{-- Toast Notifications --}}
+        <div x-data="toasts()" @notify.window="add($event.detail)"
+             class="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
+            <template x-for="toast in items" :key="toast.id">
+                <div x-show="toast.visible"
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 translate-y-2"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     x-transition:leave="transition ease-in duration-150"
+                     x-transition:leave-start="opacity-100 translate-y-0"
+                     x-transition:leave-end="opacity-0 translate-y-2"
+                     class="pointer-events-auto px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium max-w-sm"
+                     :class="toast.type === 'error'
+                         ? 'bg-red-600 text-white'
+                         : 'bg-green-600 text-white'">
+                    <span x-text="toast.message"></span>
+                </div>
+            </template>
+        </div>
+
+        <script>
+            function toasts() {
+                return {
+                    items: [],
+                    add(detail) {
+                        const id = Date.now();
+                        this.items.push({ id, message: detail.message || detail[0]?.message || '', type: detail.type || detail[0]?.type || 'success', visible: true });
+                        setTimeout(() => {
+                            const t = this.items.find(i => i.id === id);
+                            if (t) t.visible = false;
+                            setTimeout(() => { this.items = this.items.filter(i => i.id !== id); }, 200);
+                        }, 3000);
+                    }
+                };
+            }
+        </script>
+
         <div class="min-h-screen flex flex-col">
             <nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 h-14 flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-6">

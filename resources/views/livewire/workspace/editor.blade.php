@@ -1,4 +1,9 @@
-<div class="flex flex-col h-full" x-data="autocomplete()">
+<div class="flex flex-col h-full" x-data="autocomplete()"
+     @keydown.window.prevent.ctrl.s="$wire.saveVersion()"
+     @keydown.window.prevent.meta.s="$wire.saveVersion()"
+     @keydown.window.prevent.ctrl.enter="$dispatch('toggle-run-panel')"
+     @keydown.window.prevent.meta.enter="$dispatch('toggle-run-panel')"
+>
     {{-- Toolbar --}}
     <div class="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0">
         <div class="flex items-center gap-3">
@@ -36,16 +41,52 @@
                 </button>
             </div>
 
+            {{-- Preview toggle --}}
+            <button type="button" wire:click="togglePreview"
+                    class="px-2.5 py-1 text-xs font-medium rounded-md border transition"
+                    :class="@js($showPreview)
+                        ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                        : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'"
+                    title="Toggle live preview">
+                Preview
+            </button>
+
             @if($currentVersionId)
-            <button wire:click="exportPrompt"
-                    class="px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 border border-gray-300 dark:border-gray-600 rounded-md hover:border-indigo-300 dark:hover:border-indigo-700 transition"
-                    title="Export as .md">Export</button>
+            <button wire:click="exportPrompt" wire:loading.attr="disabled"
+                    class="px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 border border-gray-300 dark:border-gray-600 rounded-md hover:border-indigo-300 dark:hover:border-indigo-700 transition disabled:opacity-50"
+                    title="Export as .md">
+                <span wire:loading.remove wire:target="exportPrompt">Export</span>
+                <span wire:loading wire:target="exportPrompt">Exporting...</span>
+            </button>
             <button x-data @click="
                         const rendered = await $wire.getRenderedContent();
                         if (rendered) { navigator.clipboard.writeText(rendered); }
                     "
                     class="px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 border border-gray-300 dark:border-gray-600 rounded-md hover:border-indigo-300 dark:hover:border-indigo-700 transition"
                     title="Copy rendered with defaults">Copy Rendered</button>
+            <button x-data @click="$dispatch('toggle-run-panel')"
+                    class="px-2 py-1 text-xs text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 border border-green-300 dark:border-green-700 rounded-md hover:border-green-400 dark:hover:border-green-600 transition"
+                    title="Run with LLM providers">Run LLM</button>
+            {{-- AI Suggest Improvements --}}
+            <div x-data="{ showPicker: false }" class="relative">
+                <button @click="showPicker = !showPicker" wire:loading.attr="disabled" wire:target="suggestImprovements"
+                        class="px-2 py-1 text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 border border-purple-300 dark:border-purple-700 rounded-md hover:border-purple-400 dark:hover:border-purple-600 transition disabled:opacity-50"
+                        title="AI suggestions for improving this prompt">
+                    <span wire:loading.remove wire:target="suggestImprovements">AI Suggest</span>
+                    <span wire:loading wire:target="suggestImprovements">Analyzing...</span>
+                </button>
+                <div x-show="showPicker" x-cloak @click.outside="showPicker = false"
+                     class="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 py-1">
+                    <p class="px-3 py-1 text-xs text-gray-500 dark:text-gray-400 font-medium border-b border-gray-100 dark:border-gray-700">Select provider</p>
+                    @foreach(\App\Models\LlmProvider::where('is_active', true)->get() as $prov)
+                    <button wire:click="suggestImprovements({{ $prov->id }})"
+                            @click="showPicker = false"
+                            class="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 truncate">
+                        {{ $prov->name }} <span class="text-gray-400 dark:text-gray-500">({{ $prov->model }})</span>
+                    </button>
+                    @endforeach
+                </div>
+            </div>
             @endif
 
             <input wire:model="commitMessage" type="text" placeholder="Commit message (optional)"
@@ -59,7 +100,8 @@
     </div>
 
     {{-- Editor area --}}
-    <div class="flex-1 overflow-hidden relative">
+    <div class="flex-1 overflow-hidden relative flex flex-col">
+        <div class="@if($showPreview) flex-1 min-h-0 @else h-full @endif overflow-hidden relative">
         @if($editorMode === 'text')
         {{-- Text editor with autocomplete --}}
         <textarea wire:model.live.debounce.300ms="content"
@@ -156,6 +198,67 @@
             </div>
         </div>
         @endif
+        </div>{{-- end inner editor wrapper --}}
+
+        {{-- Live Preview Panel --}}
+        @if($showPreview)
+        <div class="flex-1 min-h-0 border-t border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-900/10 flex flex-col overflow-hidden">
+            {{-- Preview header --}}
+            <div class="px-4 py-2 border-b border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/20 shrink-0 flex items-center justify-between">
+                <span class="text-xs font-medium text-amber-700 dark:text-amber-300">Live Preview</span>
+                <div class="flex items-center gap-2">
+                    @if($previewResult)
+                        @if(!empty($previewResult['includes_resolved']))
+                            @foreach($previewResult['includes_resolved'] as $slug)
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                                    {{ $slug }}
+                                </span>
+                            @endforeach
+                        @endif
+                        @if(!empty($previewResult['variables_missing']))
+                            @foreach($previewResult['variables_missing'] as $var)
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                                    {'{'}{'{'} {{ $var }} {'}'}{'}'}
+                                </span>
+                            @endforeach
+                        @endif
+                    @endif
+                </div>
+            </div>
+
+            {{-- Variable fill form --}}
+            @if(!empty($detectedVariables))
+            <div class="px-4 py-2 border-b border-amber-200/50 dark:border-amber-800/50 shrink-0">
+                <div class="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                    @foreach($detectedVariables as $var)
+                    <div class="flex items-center gap-2">
+                        <label class="text-[11px] font-mono text-amber-700 dark:text-amber-400 whitespace-nowrap w-28 truncate" title="{{ $var }}">
+                            {{ $var }}
+                        </label>
+                        <input type="text"
+                               wire:model.live.debounce.500ms="previewVariables.{{ $var }}"
+                               placeholder="{{ $variableMetadata[$var]['default'] ?? $var }}"
+                               class="flex-1 text-xs rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 py-1 px-2 focus:border-amber-500 focus:ring-amber-500">
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+            @endif
+
+            {{-- Rendered content --}}
+            <div class="flex-1 min-h-0 overflow-auto p-4">
+                @if($previewError)
+                    <div class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3">
+                        <span class="font-medium">Error:</span> {{ $previewError }}
+                    </div>
+                @elseif($previewResult)
+                    <pre class="text-sm font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">{{ $previewResult['rendered'] }}</pre>
+                @else
+                    <p class="text-xs text-gray-400 dark:text-gray-500 italic">Start typing to see a live preview...</p>
+                @endif
+            </div>
+        </div>
+        @endif
     </div>
 
     {{-- Detected tokens bar --}}
@@ -218,6 +321,25 @@
                 @endif
             </div>
             @endforeach
+        </div>
+    </div>
+    @endif
+
+    {{-- AI Suggestions Panel --}}
+    @if($aiSuggestions)
+    <div class="border-t border-gray-200 dark:border-gray-700 bg-purple-50 dark:bg-purple-900/10 shrink-0" x-data="{ expanded: true }">
+        <button @click="expanded = !expanded" type="button"
+                class="w-full px-4 py-2 flex items-center justify-between text-xs font-medium text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/20 transition">
+            <span>AI Suggestions</span>
+            <div class="flex items-center gap-2">
+                <button wire:click="$set('aiSuggestions', null)" @click.stop class="text-purple-400 hover:text-purple-600 dark:hover:text-purple-200" title="Dismiss">&times;</button>
+                <svg class="w-3.5 h-3.5 transition-transform" :class="expanded ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </div>
+        </button>
+        <div x-show="expanded" x-cloak class="px-4 pb-3 max-h-48 overflow-auto">
+            <div class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ $aiSuggestions }}</div>
         </div>
     </div>
     @endif

@@ -2,8 +2,10 @@
 
 namespace App\Livewire\Workspace;
 
+use App\Models\LlmProvider;
 use App\Models\Prompt;
 use App\Models\PromptVersion;
+use App\Services\AiAssistantService;
 use App\Services\ImportExportService;
 use App\Services\TemplateEngine;
 use App\Services\VersioningService;
@@ -21,6 +23,11 @@ class Editor extends Component
     public bool $isDirty = false;
     public string $editorMode = 'text'; // 'text' or 'visual'
     public array $variableMetadata = [];
+    public ?string $aiSuggestions = null;
+    public bool $showPreview = false;
+    public array $previewVariables = [];
+    public ?array $previewResult = null;
+    public ?string $previewError = null;
 
     protected TemplateEngine $templateEngine;
 
@@ -49,13 +56,20 @@ class Editor extends Component
         $this->isDirty = false;
         $this->commitMessage = '';
         $this->variableMetadata = $version->variable_metadata ?? [];
+        $this->previewVariables = [];
         $this->detectTokens();
+        if ($this->showPreview) {
+            $this->renderPreview();
+        }
     }
 
     public function updatedContent()
     {
         $this->isDirty = true;
         $this->detectTokens();
+        if ($this->showPreview) {
+            $this->renderPreview();
+        }
     }
 
     public function switchMode(string $mode)
@@ -70,6 +84,9 @@ class Editor extends Component
         }
         $this->variableMetadata[$varName][$field] = $value;
         $this->isDirty = true;
+        if ($this->showPreview) {
+            $this->renderPreview();
+        }
     }
 
     public function saveVersion(VersioningService $versioningService)
@@ -104,6 +121,19 @@ class Editor extends Component
         $this->variableMetadata = $version->variable_metadata ?? [];
 
         $this->dispatch('version-created', versionId: $version->id);
+        $this->dispatch('notify', message: "Version {$version->version_number} saved", type: 'success');
+    }
+
+    public function suggestImprovements(int $providerId, AiAssistantService $aiService): void
+    {
+        if (empty($this->content)) {
+            return;
+        }
+
+        $provider = LlmProvider::findOrFail($providerId);
+        $result = $aiService->suggestImprovements($this->content, $provider);
+
+        $this->aiSuggestions = $result->success ? $result->text : "Error: {$result->error}";
     }
 
     public function exportPrompt()
@@ -120,6 +150,55 @@ class Editor extends Component
         return response()->streamDownload(function () use ($content) {
             echo $content;
         }, $filename);
+    }
+
+    public function togglePreview()
+    {
+        $this->showPreview = !$this->showPreview;
+        if ($this->showPreview) {
+            $this->renderPreview();
+        } else {
+            $this->previewResult = null;
+            $this->previewError = null;
+        }
+    }
+
+    public function renderPreview()
+    {
+        if (empty($this->content)) {
+            $this->previewResult = null;
+            $this->previewError = null;
+            return;
+        }
+
+        $variables = [];
+        foreach ($this->variableMetadata as $varName => $meta) {
+            if (!empty($meta['default'])) {
+                $variables[$varName] = $meta['default'];
+            }
+        }
+        foreach ($this->previewVariables as $varName => $value) {
+            if ($value !== '' && $value !== null) {
+                $variables[$varName] = $value;
+            }
+        }
+
+        try {
+            $this->previewResult = $this->templateEngine->render(
+                $this->content, $variables, $this->variableMetadata
+            );
+            $this->previewError = null;
+        } catch (\RuntimeException $e) {
+            $this->previewError = $e->getMessage();
+            $this->previewResult = null;
+        }
+    }
+
+    public function updatedPreviewVariables()
+    {
+        if ($this->showPreview) {
+            $this->renderPreview();
+        }
     }
 
     public function getRenderedContent(): string
