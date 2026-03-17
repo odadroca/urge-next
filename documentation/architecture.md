@@ -29,7 +29,7 @@ ApiKey ──<> Prompt (pivot: api_key_prompt)
 | users | role (admin/editor/viewer) | First user auto-admin |
 | prompts | slug (unique), type (prompt/fragment), pinned_version_id, tags (JSON) | Soft deletes, auto-slug |
 | prompt_versions | version_number, content, variables (JSON), includes (JSON), variable_metadata (JSON) | Immutable |
-| results | source (api/manual/import/mcp), provider_name, model_name, response_text, starred, rating | Unified response archive |
+| results | source, provider_name, model_name, response_text, starred, rating, rendered_content, variables_used (JSON), input_tokens, output_tokens, duration_ms, status, error_message, import_filename, created_by | Unified response archive |
 | categories | name, slug, color | Auto-slug |
 | llm_providers | driver, api_key (encrypted), model, endpoint, settings (JSON) | 6 drivers |
 | collections | title, description | Ordered groups |
@@ -46,31 +46,40 @@ ApiKey ──<> Prompt (pivot: api_key_prompt)
 
 ## Integration Architecture
 
-### Four Surfaces, One Backend
+### Five Surfaces, One Backend
 
 ```
-┌─────────────────────────────────────────────────┐
-│                 Laravel App                      │
-│                                                  │
-│  ┌──────────┐  ┌──────────┐  ┌───────────────┐  │
-│  │ Livewire │  │ REST API │  │  MCP Server   │  │
-│  │ Web UI   │  │ /api/v1/ │  │  (stdio)      │  │
-│  └────┬─────┘  └────┬─────┘  └───────┬───────┘  │
-│       │              │                │          │
-│       └──────────────┼────────────────┘          │
-│                      v                           │
-│            ┌─────────────────┐                   │
-│            │  Service Layer  │                   │
-│            │  TemplateEngine │                   │
-│            │  VersioningSvc  │                   │
-│            │  ApiKeySvc      │                   │
-│            │  LlmDispatchSvc │                   │
-│            └────────┬────────┘                   │
-│                     v                            │
-│            ┌─────────────────┐                   │
-│            │  Eloquent/SQLite│                   │
-│            └─────────────────┘                   │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                      Laravel App                          │
+│                                                           │
+│  ┌──────────┐  ┌──────────┐  ┌─────────┐  ┌──────────┐  │
+│  │ Livewire │  │ REST API │  │ MCP SSE │  │MCP stdio │  │
+│  │ Web UI   │  │ /api/v1/ │  │ /mcp    │  │ artisan  │  │
+│  └────┬─────┘  └────┬─────┘  └────┬────┘  └────┬─────┘  │
+│       │              │             │             │        │
+│       └──────────────┼─────────────┴─────────────┘        │
+│                      v                                    │
+│            ┌──────────────────┐                           │
+│            │  Service Layer   │                           │
+│            │  TemplateEngine  │                           │
+│            │  VersioningSvc   │                           │
+│            │  McpToolHandler  │                           │
+│            │  ApiKeySvc       │                           │
+│            │  LlmDispatchSvc  │                           │
+│            │  AiAssistantSvc  │                           │
+│            │  ImportExportSvc │                           │
+│            └────────┬─────────┘                           │
+│                     v                                     │
+│            ┌──────────────────┐                           │
+│            │  Eloquent/SQLite │                           │
+│            └──────────────────┘                           │
+└──────────────────────────────────────────────────────────┘
+
+External consumers:
+  Browser (human)  ──> Livewire Web UI
+  Any HTTP client  ──> REST API
+  Claude Desktop   ──> MCP SSE (remote) or MCP stdio (local)
+  CustomGPT        ──> REST API (via OpenAPI spec)
 ```
 
 ### REST API (`/api/v1/`)
@@ -136,6 +145,15 @@ Both transports dispatch to the same `McpToolHandler` service, which maps tool c
 | `urge://prompts/{slug}` | Prompt with active version content |
 | `urge://prompts/{slug}/v/{n}` | Specific version content |
 
+### Internal Endpoints (no auth, same-origin only)
+
+```
+POST /internal/variables     — extract variables from content
+GET  /internal/fragments     — list fragment slugs for autocomplete
+```
+
+Used by the Editor's inline autocomplete (Alpine.js) to suggest variable names and fragment includes.
+
 ### CustomGPT Actions
 
 OpenAPI 3.0 spec generated from the REST API. Hosted at `/api/openapi.json`. GPT custom actions import this spec directly.
@@ -152,35 +170,61 @@ Markdown file with instructions + API examples. Tells Claude how to call the URG
 app/Livewire/
 ├── Dashboard.php              # Recent prompts, starred results, inline create
 ├── Browse.php                 # Tabbed: prompts, fragments, starred, collections
-├── Settings.php               # Tabbed: providers, API keys, users, categories
+├── Settings.php               # Tabbed settings container
+├── Browse/
+│   └── CollectionList.php     # Collection CRUD, expand/collapse, reorder items
+├── Settings/
+│   ├── ApiKeys.php            # API key CRUD, reveal once, scope to prompts
+│   ├── LlmProviders.php      # LLM provider CRUD, test connection, toggle active
+│   ├── Categories.php         # Category CRUD with color picker
+│   └── UserManagement.php     # Admin-only user role management
 └── Workspace/
     ├── WorkspacePage.php      # 3-panel orchestrator
-    ├── Editor.php             # Content editing, variable detection
-    ├── VersionSidebar.php     # Version list and selection
-    ├── ResultsPanel.php       # Results display, star, rate
-    ├── ManualResultForm.php   # Paste results
-    └── PromptMetadata.php     # Name, type, category, tags
+    ├── Editor.php             # Content editing, live preview, visual composer, Ctrl+S
+    ├── VersionSidebar.php     # Version list, select, pin, add-to-collection, diff
+    ├── ResultsPanel.php       # Results list, star, rate, compare, AI summarize
+    ├── ManualResultForm.php   # Paste result with provider/model/notes/rating
+    ├── ImportResults.php      # Upload .md files, preview frontmatter, import
+    ├── RunWithLlm.php         # LLM execution: provider selection, variable fill, run
+    └── PromptMetadata.php     # Name, type, category, tags, description
 ```
 
 ### Service Layer
 
 ```
 app/Services/
-├── TemplateEngine.php         # {{var}} + {{>slug}} rendering
-├── VersioningService.php      # Transactional version creation
-├── ApiKeyService.php          # Key generation + hashing
-├── ImportExportService.php    # .md with YAML frontmatter
-├── LlmDispatchService.php    # Driver dispatch (Phase 5)
-├── AiAssistantService.php    # Meta-prompts for analysis (Phase 5)
-└── LlmProviders/             # 6 drivers (Phase 5)
+├── TemplateEngine.php         # {{var}} + {{>slug}} rendering, circular detection
+├── VersioningService.php      # Transactional version creation, auto-numbering
+├── ApiKeyService.php          # Key generation (prefix + random bytes), SHA-256 hashing
+├── ImportExportService.php    # .md with YAML frontmatter import/export
+├── McpToolHandler.php         # MCP tool dispatch (shared by SSE + stdio transports)
+├── LlmDispatchService.php    # Resolve driver, dispatch prompt
+├── AiAssistantService.php    # Meta-prompts: diff summarization, improvement suggestions
+└── LlmProviders/
+    ├── Contracts/LlmDriverInterface.php   # complete(), completeWithSystem()
+    ├── LlmResult.php                      # Readonly value object
+    ├── OpenAiDriver.php
+    ├── AnthropicDriver.php
+    ├── MistralDriver.php
+    ├── GeminiDriver.php
+    ├── OllamaDriver.php
+    └── OpenRouterDriver.php
 ```
+
+### Artisan Commands
+
+| Command | Description |
+|---------|-------------|
+| `php artisan urge:mcp-server` | Start stdio MCP server for local clients |
+| `php artisan urge:import-v1 {path}` | Migrate data from URGE v1 SQLite database (idempotent, transaction-wrapped) |
 
 ## Phase Roadmap
 
 | Phase | Scope | Deliverables |
 |---|---|---|
-| 1 (done) | Core workspace | Models, services, Livewire workspace, 48 tests |
-| 2 | API + MCP | REST API, MCP server, OpenAPI spec, Claude Skill, API key management |
-| 3 | Rich editing | Autocomplete, visual composer, version diff, result comparison |
-| 4 | Import/export + collections | .md import/export, collections CRUD, enhanced browse |
-| 5 | LLM drivers + polish | 6 LLM drivers, AI features, v1 migration, production readiness |
+| 1 (done) | Core workspace | Models, services, Livewire workspace |
+| 2 (done) | API + MCP | REST API, MCP server (SSE + stdio), OpenAPI spec, API key management |
+| 3 (done) | Rich editing | Inline autocomplete, visual composer, version diff, result comparison |
+| 4 (done) | Import/export + collections | .md import/export, collections CRUD, enhanced browse |
+| 5 (done) | LLM drivers + AI + polish | 6 LLM drivers, AI assistant, v1 migration, settings UI, roles |
+| 6 (done) | Live preview | Rendered preview with include resolution + variable fill from defaults |
