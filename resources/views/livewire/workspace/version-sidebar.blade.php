@@ -6,7 +6,7 @@
 
     <div class="space-y-1">
         @forelse($versions as $version)
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-1 group">
             {{-- Diff checkbox --}}
             @if($versions->count() > 1)
             <input type="checkbox"
@@ -32,6 +32,23 @@
                 @endif
                 <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{{ $version->created_at->diffForHumans() }}</p>
             </button>
+
+            {{-- Add to collection --}}
+            @if($collections->count() > 0)
+            <div class="relative opacity-0 group-hover:opacity-100 transition shrink-0" x-data="{ open: false }">
+                <button @click.stop="open = !open" class="text-gray-300 dark:text-gray-600 hover:text-indigo-500 dark:hover:text-indigo-400 text-xs" title="Add to collection">+</button>
+                <div x-show="open" x-cloak @click.outside="open = false"
+                     class="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 py-1 max-h-32 overflow-y-auto">
+                    @foreach($collections as $coll)
+                    <button wire:click="addVersionToCollection({{ $version->id }}, {{ $coll->id }})"
+                            @click="open = false"
+                            class="w-full text-left px-3 py-1 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 truncate">
+                        {{ $coll->title }}
+                    </button>
+                    @endforeach
+                </div>
+            </div>
+            @endif
         </div>
         @empty
         <p class="text-xs text-gray-400 dark:text-gray-500 italic">No versions yet. Write content and save.</p>

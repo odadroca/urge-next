@@ -1,10 +1,15 @@
 <div class="p-3" x-data="{ compareIds: [], showCompare: false }">
     <div class="flex items-center justify-between mb-3">
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Results</h3>
-        <label class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-            <input type="checkbox" wire:model.live="showAllVersions" class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 dark:bg-gray-700">
-            All versions
-        </label>
+        <div class="flex items-center gap-2">
+            @if($results->count() > 0)
+            <button wire:click="exportAllResults" class="text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400" title="Export all as ZIP">Export All</button>
+            @endif
+            <label class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                <input type="checkbox" wire:model.live="showAllVersions" class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 dark:bg-gray-700">
+                All versions
+            </label>
+        </div>
     </div>
 
     {{-- Compare bar --}}
@@ -97,10 +102,28 @@
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1.5 italic">{{ $result->notes }}</p>
             @endif
 
-            {{-- Copy + Delete --}}
-            <div class="flex items-center gap-2 mt-2">
+            {{-- Actions --}}
+            <div class="flex items-center gap-2 mt-2" x-data="{ showCollPicker: false }">
                 <button x-data @click="navigator.clipboard.writeText(@js($result->response_text))"
                         class="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">Copy</button>
+                <button wire:click="exportResult({{ $result->id }})"
+                        class="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">Export</button>
+                <div class="relative">
+                    <button @click="showCollPicker = !showCollPicker"
+                            class="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300">+ Collection</button>
+                    <div x-show="showCollPicker" x-cloak @click.outside="showCollPicker = false"
+                         class="absolute bottom-full right-0 mb-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 py-1 max-h-40 overflow-y-auto">
+                        @forelse($collections as $coll)
+                        <button wire:click="addResultToCollection({{ $result->id }}, {{ $coll->id }})"
+                                @click="showCollPicker = false"
+                                class="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 truncate">
+                            {{ $coll->title }}
+                        </button>
+                        @empty
+                        <p class="px-3 py-1.5 text-xs text-gray-400 dark:text-gray-500 italic">No collections yet</p>
+                        @endforelse
+                    </div>
+                </div>
                 <button wire:click="deleteResult({{ $result->id }})" wire:confirm="Delete this result?"
                         class="text-xs text-red-400 hover:text-red-600 dark:hover:text-red-300">Delete</button>
             </div>

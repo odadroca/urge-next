@@ -4,6 +4,7 @@ namespace App\Livewire\Workspace;
 
 use App\Models\Prompt;
 use App\Models\PromptVersion;
+use App\Services\ImportExportService;
 use App\Services\TemplateEngine;
 use App\Services\VersioningService;
 use Livewire\Attributes\On;
@@ -103,6 +104,39 @@ class Editor extends Component
         $this->variableMetadata = $version->variable_metadata ?? [];
 
         $this->dispatch('version-created', versionId: $version->id);
+    }
+
+    public function exportPrompt()
+    {
+        if (!$this->currentVersionId) {
+            return;
+        }
+
+        $version = PromptVersion::with('prompt')->findOrFail($this->currentVersionId);
+        $service = app(ImportExportService::class);
+        $content = $service->exportPromptVersion($version);
+        $filename = $version->prompt->slug . '-v' . $version->version_number . '.md';
+
+        return response()->streamDownload(function () use ($content) {
+            echo $content;
+        }, $filename);
+    }
+
+    public function getRenderedContent(): string
+    {
+        if (empty($this->content)) {
+            return '';
+        }
+
+        $defaults = [];
+        foreach ($this->variableMetadata as $varName => $meta) {
+            if (!empty($meta['default'])) {
+                $defaults[$varName] = $meta['default'];
+            }
+        }
+
+        $result = $this->templateEngine->render($this->content, $defaults);
+        return $result['rendered'];
     }
 
     private function detectTokens(): void

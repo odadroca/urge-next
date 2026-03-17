@@ -36,6 +36,18 @@
                 </button>
             </div>
 
+            @if($currentVersionId)
+            <button wire:click="exportPrompt"
+                    class="px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 border border-gray-300 dark:border-gray-600 rounded-md hover:border-indigo-300 dark:hover:border-indigo-700 transition"
+                    title="Export as .md">Export</button>
+            <button x-data @click="
+                        const rendered = await $wire.getRenderedContent();
+                        if (rendered) { navigator.clipboard.writeText(rendered); }
+                    "
+                    class="px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 border border-gray-300 dark:border-gray-600 rounded-md hover:border-indigo-300 dark:hover:border-indigo-700 transition"
+                    title="Copy rendered with defaults">Copy Rendered</button>
+            @endif
+
             <input wire:model="commitMessage" type="text" placeholder="Commit message (optional)"
                    class="w-48 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 shadow-sm text-xs focus:border-indigo-500 focus:ring-indigo-500 py-1">
             <button wire:click="saveVersion" wire:loading.attr="disabled"

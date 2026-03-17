@@ -175,14 +175,14 @@ API: `ApiKeyAuthentication` middleware, Bearer token, rate limited per key.
 
 ## Current Status
 
-**Phase 1 complete.** Core workspace functional: create prompt, save versions, paste results, star/rate. 48 tests passing.
+**Phases 1-4 complete.** 153 tests passing (370 assertions).
 
 ### Phase Roadmap (reordered for API-first)
 
 | Phase | Focus |
 |---|---|
 | 1 (done) | Core workspace UI |
-| 2 | API layer + MCP server + OpenAPI spec |
-| 3 | Rich editing (autocomplete, visual composer, diff, compare) |
-| 4 | Import/export + collections |
+| 2 (done) | API layer + MCP server + OpenAPI spec |
+| 3 (done) | Rich editing (autocomplete, visual composer, diff, compare) |
+| 4 (done) | Import/export + collections |
 | 5 | LLM drivers + AI features + v1 migration + polish |

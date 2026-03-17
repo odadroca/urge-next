@@ -20,5 +20,7 @@
         <div class="border-t border-gray-200 dark:border-gray-700">
             <livewire:workspace.manual-result-form :prompt="$prompt" :current-version="$currentVersion" :key="'mr-'.$prompt->id" />
         </div>
+
+        <livewire:workspace.import-results :prompt="$prompt" :current-version="$currentVersion" :key="'ir-'.$prompt->id" />
     </div>
 </div>
