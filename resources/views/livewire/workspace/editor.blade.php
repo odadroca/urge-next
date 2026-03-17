@@ -145,7 +145,7 @@
 
                         <div class="flex-1" x-show="block.type === 'text'">
                             <textarea x-model="block.value"
-                                      @input="$wire.set('content', serialize()); $wire.call('updatedContent')"
+                                      @input="$wire.set('content', serialize())"
                                       rows="2"
                                       class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 text-sm font-mono resize-y focus:border-indigo-500 focus:ring-indigo-500"
                                       placeholder="Text block..."></textarea>
@@ -155,7 +155,7 @@
                             <div class="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
                                 <span class="text-blue-700 dark:text-blue-400 font-mono text-sm">{<span>{</span></span>
                                 <input x-model="block.value"
-                                       @input="$wire.set('content', serialize()); $wire.call('updatedContent')"
+                                       @input="$wire.set('content', serialize())"
                                        class="flex-1 bg-transparent border-0 text-sm font-mono text-blue-700 dark:text-blue-300 focus:ring-0 p-0"
                                        placeholder="variable_name">
                                 <span class="text-blue-700 dark:text-blue-400 font-mono text-sm">}<span>}</span></span>
@@ -166,14 +166,14 @@
                             <div class="flex items-center gap-2 px-3 py-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-md">
                                 <span class="text-purple-700 dark:text-purple-400 font-mono text-sm">{<span>{</span>&gt;</span>
                                 <input x-model="block.value"
-                                       @input="$wire.set('content', serialize()); $wire.call('updatedContent')"
+                                       @input="$wire.set('content', serialize())"
                                        class="flex-1 bg-transparent border-0 text-sm font-mono text-purple-700 dark:text-purple-300 focus:ring-0 p-0"
                                        placeholder="fragment-slug">
                                 <span class="text-purple-700 dark:text-purple-400 font-mono text-sm">}<span>}</span></span>
                             </div>
                         </div>
 
-                        <button @click="removeBlock(index); $wire.set('content', serialize()); $wire.call('updatedContent')"
+                        <button @click="removeBlock(index); $wire.set('content', serialize())"
                                 class="text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition mt-2 text-sm">
                             &times;
                         </button>
